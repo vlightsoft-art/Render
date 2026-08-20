@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: famfin-ai-gateway
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REGION
+        value: render
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: OPENAI_EXTRACT_MODEL
+        value: gpt-5.6-luna
+      - key: MONGODB_DB
+        value: familyfinanceapp
+      - key: ENFORCE_QUOTA
+        value: "true"
+      - key: DEFAULT_EDITION
+        value: plus
+      - key: QUOTA_PLUS_AI
+        value: "200"
+      - key: QUOTA_PLUS_SCANS
+        value: "50"
+      - key: STORE_CHAT_LOGS
+        value: "false"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: FAMFIN_AI_APP_TOKEN
+        sync: false

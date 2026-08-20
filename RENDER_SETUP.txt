@@ -1,0 +1,32 @@
+FamFin AI Gateway - Render Free Setup
+=====================================
+
+Service type: Web Service
+Runtime: Node
+Plan: Free
+Build command: npm install
+Start command: npm start
+Health check path: /healthz
+
+Required secrets in Render:
+OPENAI_API_KEY=<your OpenAI API key>
+MONGODB_URI=<your rotated MongoDB Atlas connection string>
+FAMFIN_AI_APP_TOKEN=<long random token>
+
+Recommended environment variables:
+MONGODB_DB=familyfinanceapp
+OPENAI_MODEL=gpt-5.6-luna
+OPENAI_EXTRACT_MODEL=gpt-5.6-luna
+ENFORCE_QUOTA=true
+DEFAULT_EDITION=plus
+QUOTA_PLUS_AI=200
+QUOTA_PLUS_SCANS=50
+REGION=render
+
+After deployment:
+FAMFIN_AI_GATEWAY=https://YOUR-SERVICE.onrender.com
+FAMFIN_AI_APP_TOKEN=<same middleware token stored in Render>
+
+Main request URL:
+POST https://YOUR-SERVICE.onrender.com/v1/ai/chat
+Authorization: Bearer <FAMFIN_AI_APP_TOKEN>
