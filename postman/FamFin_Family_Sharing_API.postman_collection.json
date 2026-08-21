@@ -1,0 +1,81 @@
+{
+  "info": {
+    "name": "FamFin Family Sharing API",
+    "description": "Exact five-route wire contract used by household_sharing_service.dart",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://YOUR-SERVICE.onrender.com" },
+    { "key": "accessToken", "value": "" },
+    { "key": "appToken", "value": "" },
+    { "key": "householdId", "value": "" },
+    { "key": "invitationId", "value": "" },
+    { "key": "inviteCode", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Create Invitation",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "x-app-token", "value": "{{appToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sister@example.com\",\n  \"role\": \"MEMBER\",\n  \"displayName\": \"Priya\"\n}"
+        },
+        "url": "{{baseUrl}}/api/households/{{householdId}}/invitations"
+      }
+    },
+    {
+      "name": "2 - List Invitations and Members",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "x-app-token", "value": "{{appToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/households/{{householdId}}/invitations"
+      }
+    },
+    {
+      "name": "3 - Revoke Invitation",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "x-app-token", "value": "{{appToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/households/{{householdId}}/invitations/{{invitationId}}"
+      }
+    },
+    {
+      "name": "4 - Change Role",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "x-app-token", "value": "{{appToken}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"role\": \"VIEWER\"\n}" },
+        "url": "{{baseUrl}}/api/households/{{householdId}}/invitations/{{invitationId}}/role"
+      }
+    },
+    {
+      "name": "5 - Redeem Invite Code",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "x-app-token", "value": "{{appToken}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{inviteCode}}\"\n}" },
+        "url": "{{baseUrl}}/api/invitations/redeem"
+      }
+    }
+  ]
+}

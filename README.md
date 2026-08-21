@@ -89,3 +89,15 @@ Both collections are included under `postman/`:
 ## Important
 
 Never commit `.env`, OpenAI keys, MongoDB credentials, JWT secrets or app tokens.
+
+## Family sharing API
+
+Version 1.1 adds the exact Flutter family-sharing wire routes:
+
+- `POST /api/households/:hid/invitations`
+- `GET /api/households/:hid/invitations`
+- `DELETE /api/households/:hid/invitations/:id`
+- `POST /api/households/:hid/invitations/:id/role`
+- `POST /api/invitations/redeem`
+
+Invitation codes expire after seven days, are single-use, and redeem attempts are rate-limited. Existing `HOUSEHOLD_ADMIN` memberships are exposed/treated as `OWNER` for family-sharing authorization. Production invitation email is sent server-side through Resend; configure `RESEND_API_KEY` and `INVITE_FROM_EMAIL`.

@@ -1,0 +1,51 @@
+FAMFIN UNIFIED API v1.2 - FAMILY SHARING DEPLOY
+================================================
+
+Exact Flutter routes included:
+  POST   /api/households/:hid/invitations
+  GET    /api/households/:hid/invitations
+  DELETE /api/households/:hid/invitations/:id
+  POST   /api/households/:hid/invitations/:id/role
+  POST   /api/invitations/redeem
+
+Database setup (safe/idempotent):
+  npm install
+  npm run setup-sharing-db
+
+Local validation:
+  npm run check
+  npm run verify-db
+  npm start
+
+Render required environment:
+  MONGODB_URI=<real Atlas URI>
+  MONGODB_DB=family_finance
+  FAMFIN_APP_TOKEN=<Flutter x-app-token value>
+  JWT_ACCESS_SECRET=<long random secret>
+  EXPORT_SIGNING_SECRET=<different long random secret>
+  OPENAI_API_KEY=<OpenAI key>
+  FAMFIN_AI_APP_TOKEN=<AI gateway bearer token>
+  PUBLIC_BASE_URL=https://<service>.onrender.com
+  CORS_ORIGINS=*
+
+Invitation email in production:
+  RESEND_API_KEY=<Resend API key>
+  INVITE_FROM_EMAIL=FamFin <invites@your-verified-domain>
+  INVITE_APP_URL=<optional app/deep link>
+
+Render startup:
+  Build Command: npm install
+  Start Command: npm start
+  Health Check: /healthz
+
+Current repo replacement workflow:
+  1. Extract this package into your current Git repository folder.
+  2. KEEP the existing .git directory.
+  3. DO NOT copy/commit .env or node_modules.
+  4. git add -A
+  5. git status
+  6. git commit -m "Add FamFin family sharing API"
+  7. git push origin main
+
+If the Render service is already connected to that repository with automatic
+deploy enabled, the push triggers the deployment automatically.

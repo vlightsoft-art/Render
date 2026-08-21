@@ -1,14 +1,15 @@
 {
   "name": "famfin-unified-api",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Unified FamFin Data/Auth API and AI Gateway for Render",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/routes.js && node --check src/records.js && node --check src/specials.js && node --check src/auth.js && node --check src/ai-gateway.mjs",
+    "check": "node --check src/server.js && node --check src/routes.js && node --check src/records.js && node --check src/specials.js && node --check src/sharing.js && node --check src/auth.js && node --check src/ai-gateway.mjs",
     "init-db": "node init-db.js",
-    "verify-db": "node verify-db.js"
+    "verify-db": "node verify-db.js",
+    "setup-sharing-db": "node setup-sharing-db.js"
   },
   "engines": {
     "node": ">=22.12.0"

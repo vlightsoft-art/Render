@@ -39,7 +39,7 @@ async function closeDatabase() {
 async function ensureRuntimeCollections() {
   const db = getDb();
   const existing = new Set((await db.listCollections({}, { nameOnly: true }).toArray()).map(x => x.name));
-  for (const name of ['auth_credentials','auth_sessions','auth_rate_limits']) {
+  for (const name of ['auth_credentials','auth_sessions','auth_rate_limits','household_invitations','invite_redeem_rate_limits']) {
     if (!existing.has(name)) await db.createCollection(name);
   }
   await db.collection('auth_credentials').createIndex({ userId: 1 }, { unique: true, name: 'uniq_user' });
@@ -49,6 +49,27 @@ async function ensureRuntimeCollections() {
   await db.collection('auth_sessions').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expires' });
   await db.collection('auth_rate_limits').createIndex({ key: 1 }, { unique: true, name: 'uniq_key' });
   await db.collection('auth_rate_limits').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expires' });
+
+  // Family sharing runtime state. These are server-side transport/auth
+  // collections, not financial business collections.
+  await db.collection('household_invitations').createIndex(
+    { inviteCode: 1 },
+    { unique: true, name: 'uniq_invite_code', partialFilterExpression: { inviteCode: { $type: 'string' } } }
+  );
+  await db.collection('household_invitations').createIndex(
+    { householdId: 1, status: 1, createdAt: -1 },
+    { name: 'by_household_status' }
+  );
+  await db.collection('household_invitations').createIndex(
+    { householdId: 1, email: 1, status: 1 },
+    { name: 'by_household_email_status' }
+  );
+  await db.collection('household_invitations').createIndex(
+    { expiresAt: 1, status: 1 },
+    { name: 'by_expiry_status' }
+  );
+  await db.collection('invite_redeem_rate_limits').createIndex({ key: 1 }, { unique: true, name: 'uniq_key' });
+  await db.collection('invite_redeem_rate_limits').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'ttl_expires' });
 
   // Contract requires a sparse UNIQUE importReference per household. Repair the
   // earlier initializer if it created the named index without unique:true.

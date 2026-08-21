@@ -11,6 +11,10 @@ const {
   uploadDocument, getDocumentContent, requestExport, downloadExport, streamExportFile
 } = require('./specials');
 const { MAX_UPLOAD_BYTES } = require('./constants');
+const {
+  createInvitation, listInvitationsAndMembers, revokeInvitation,
+  changeRole: changeSharingRole, redeemInvitation, sendSharingError
+} = require('./sharing');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
@@ -111,6 +115,38 @@ router.delete('/v1/auth/account', asyncRoute(async (req, res) => {
 
 // Everything below requires a valid access token.
 router.use('/api', authMiddleware);
+
+// -------------------------- Family sharing -------------------------------
+// Exact wire contract used by household_sharing_service.dart.
+router.post('/api/households/:householdId/invitations', async (req, res, next) => {
+  try {
+    return res.status(201).json({ data: await createInvitation(req.auth.userId, req.params.householdId, req.body) });
+  } catch (e) { try { return sendSharingError(res, e); } catch (x) { return next(x); } }
+});
+
+router.get('/api/households/:householdId/invitations', async (req, res, next) => {
+  try {
+    return res.status(200).json({ data: await listInvitationsAndMembers(req.auth.userId, req.params.householdId) });
+  } catch (e) { try { return sendSharingError(res, e); } catch (x) { return next(x); } }
+});
+
+router.delete('/api/households/:householdId/invitations/:id', async (req, res, next) => {
+  try {
+    return res.status(200).json({ data: await revokeInvitation(req.auth.userId, req.params.householdId, req.params.id) });
+  } catch (e) { try { return sendSharingError(res, e); } catch (x) { return next(x); } }
+});
+
+router.post('/api/households/:householdId/invitations/:id/role', async (req, res, next) => {
+  try {
+    return res.status(200).json({ data: await changeSharingRole(req.auth.userId, req.params.householdId, req.params.id, req.body) });
+  } catch (e) { try { return sendSharingError(res, e); } catch (x) { return next(x); } }
+});
+
+router.post('/api/invitations/redeem', async (req, res, next) => {
+  try {
+    return res.status(200).json({ data: await redeemInvitation(req.auth.userId, req.body, req.ip) });
+  } catch (e) { try { return sendSharingError(res, e); } catch (x) { return next(x); } }
+});
 
 // -------------------------- Blocking gaps ---------------------------------
 router.post('/api/households', asyncRoute(async (req, res) => {

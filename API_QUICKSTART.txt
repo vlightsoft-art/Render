@@ -95,3 +95,22 @@ RENDER
   Build:  npm install
   Start:  npm start
   Health: /healthz
+
+================================================================================
+FAMILY SHARING (v1.1)
+================================================================================
+
+Exact routes used by household_sharing_service.dart:
+
+POST   /api/households/:hid/invitations
+GET    /api/households/:hid/invitations
+DELETE /api/households/:hid/invitations/:id
+POST   /api/households/:hid/invitations/:id/role
+POST   /api/invitations/redeem
+
+Production email settings:
+  RESEND_API_KEY=<secret>
+  INVITE_FROM_EMAIL=FamFin <invites@your-verified-domain.com>
+  INVITE_APP_URL=<optional deep link or app URL>
+
+Import postman/FamFin_Family_Sharing_API.postman_collection.json to test all five.

@@ -1,0 +1,70 @@
+FAMFIN — FAMILY SHARING API (IMPLEMENTED)
+==========================================
+
+Exact routes:
+
+POST   /api/households/:hid/invitations
+GET    /api/households/:hid/invitations
+DELETE /api/households/:hid/invitations/:id
+POST   /api/households/:hid/invitations/:id/role
+POST   /api/invitations/redeem
+
+All require:
+  Authorization: Bearer <session token>
+  x-app-token: <app token>
+  Content-Type: application/json
+
+The unified CORS middleware already allows x-app-token.
+
+CREATE
+POST /api/households/:hid/invitations
+{
+  "email": "sister@example.com",
+  "role": "MEMBER",
+  "familyMemberId": "optional",
+  "displayName": "Priya"
+}
+
+Returns 201:
+{
+  "data": {
+    "id": "...",
+    "email": "sister@example.com",
+    "role": "MEMBER",
+    "status": "PENDING",
+    "displayName": "Priya",
+    "familyMemberId": "optional",
+    "inviteCode": "K7F2QX"
+  }
+}
+
+LIST
+GET /api/households/:hid/invitations
+Returns one data array containing pending invitations followed by accepted members.
+
+REVOKE
+DELETE /api/households/:hid/invitations/:id
+Returns:
+{ "data": { "id": "...", "status": "REVOKED" } }
+
+CHANGE ROLE
+POST /api/households/:hid/invitations/:id/role
+{ "role": "VIEWER" }
+Works for pending invitation IDs and accepted household_users IDs.
+Rejects demotion of the final OWNER.
+
+REDEEM
+POST /api/invitations/redeem
+{ "code": "K7F2QX" }
+Returns householdId and accepted member object. The code is burned immediately.
+
+Server rules implemented:
+- Household-scoped calls resolve authenticated caller membership from household_users.
+- Only OWNER/ADMIN equivalents can create, revoke or change roles.
+- Existing HOUSEHOLD_ADMIN is treated as OWNER for backward compatibility.
+- Codes are 6 chars from a 32-character non-ambiguous alphabet.
+- Codes expire after 7 days and are single-use.
+- Redeem is rate-limited per authenticated user and IP.
+- Redeem requires the authenticated account email to match the invited email.
+- Invitation email delivery is server-side via Resend in production.
+- Pending/accepted membership information never comes from the request role for authorization.
