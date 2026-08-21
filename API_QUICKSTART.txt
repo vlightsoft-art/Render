@@ -1,0 +1,97 @@
+FAMFIN UNIFIED API - QUICK START
+================================
+
+ONE HOST
+  https://YOUR-SERVICE.onrender.com
+
+FLUTTER
+  FAMFIN_API_BASE=https://YOUR-SERVICE.onrender.com
+  FAMFIN_AI_GATEWAY=https://YOUR-SERVICE.onrender.com
+
+SURFACES
+  Identity: /v1/auth/*
+  Data:     /api/*
+  AI:       /v1/ai/*
+
+DATA / AUTH HEADERS
+  content-type: application/json
+  authorization: Bearer {USER_ACCESS_TOKEN}
+  x-app-token: {FAMFIN_APP_TOKEN}      (when configured)
+  x-correlation-id: unique-per-request
+  if-match: {version}                  (PUT only)
+  x-step-up: verified                  (household export only)
+
+AI HEADERS
+  content-type: application/json
+  accept: text/event-stream            (/v1/ai/chat)
+  authorization: Bearer {FAMFIN_AI_APP_TOKEN}
+  x-famfin-client: famfin-app
+  x-famfin-household: {householdId}    (when available)
+
+IMPORTANT
+  USER_ACCESS_TOKEN and FAMFIN_AI_APP_TOKEN are NOT the same token.
+
+HEALTH
+  GET /healthz
+  GET /api/health/database
+  GET /v1/ai/health
+
+AUTH / BOOTSTRAP
+  POST   /v1/auth/sign-up
+  POST   /v1/auth/sign-in
+  POST   /v1/auth/oauth
+  POST   /v1/auth/refresh
+  POST   /v1/auth/reset
+  POST   /v1/auth/sign-out
+  DELETE /v1/auth/account
+  POST   /api/households
+  GET    /api/households/:id
+  PUT    /api/households/:id
+  GET    /api/me
+
+GENERIC CRUD - 34 ALLOWED COLLECTIONS
+  GET    /api/households/:householdId/:collection
+  GET    /api/households/:householdId/:collection/:id
+  POST   /api/households/:householdId/:collection
+  PUT    /api/households/:householdId/:collection/:id
+  DELETE /api/households/:householdId/:collection/:id
+
+SPECIAL DATA
+  POST   /api/households/:hid/bill-instances/:id/pay
+  GET    /api/households/:hid/search
+  POST   /api/households/:hid/exports
+  GET    /api/households/:hid/exports/:id/download
+  POST   /api/households/:hid/documents/upload
+  GET    /api/households/:hid/documents/:id/content
+  GET    /api/me/preferences
+  PUT    /api/me/preferences
+  GET    /api/me/notification-preferences
+  PUT    /api/me/notification-preferences
+  GET    /api/households/:hid/entitlements
+  POST   /api/households/:hid/subscriptions/verify
+  POST   /api/households/:hid/transactions/bulk
+
+AI
+  POST /v1/ai/chat
+  POST /v1/ai/extract
+  GET  /v1/ai/quota
+  GET  /v1/ai/health
+  POST /v1/ai/feedback
+
+MONEY
+  Send "1240.00", never 1240.00.
+
+PUT
+  Send If-Match: 7 (or body.version: 7).
+
+LOCAL
+  npm install
+  copy .env.example .env
+  npm run check
+  npm run verify-db
+  npm start
+
+RENDER
+  Build:  npm install
+  Start:  npm start
+  Health: /healthz

@@ -1,0 +1,68 @@
+FAMFIN - REPLACE OLD "API Service" WITH THE UNIFIED SERVICE
+============================================================
+
+Your old local folder was similar to:
+
+  C:\Users\Moshika\Programming\Raghul\Mobile APP\API Service
+
+Recommended safe replacement:
+
+1. Rename the old folder first:
+
+   API Service  ->  API Service OLD BACKUP
+
+2. Create a fresh folder named exactly:
+
+   API Service
+
+3. Extract ALL files from this ZIP into the new API Service folder.
+
+4. Copy the VALUES you still need from your old .env into the NEW .env.
+   Do not blindly overwrite .env.example.
+
+5. Add the new Data/Auth variables too:
+
+   MONGODB_URI
+   MONGODB_DB=family_finance
+   FAMFIN_APP_TOKEN
+   JWT_ACCESS_SECRET
+   EXPORT_SIGNING_SECRET
+   PUBLIC_BASE_URL
+
+6. Keep the existing AI variables:
+
+   OPENAI_API_KEY
+   OPENAI_MODEL
+   OPENAI_EXTRACT_MODEL
+   FAMFIN_AI_APP_TOKEN
+   REGION
+   quota/stream variables
+
+7. Install and validate:
+
+   npm install
+   npm run check
+   npm run verify-db
+   npm start
+
+8. Local checks:
+
+   GET /healthz
+   GET /api/health/database
+   GET /v1/ai/health
+
+9. Push this folder to the SAME GitHub repository used by your current
+   Render service if you want to replace the old Render deployment.
+
+10. In Render use:
+
+   Build Command: npm install
+   Start Command: npm start
+   Health Check Path: /healthz
+
+11. Once deployed, both Flutter defines may use the same host:
+
+   FAMFIN_API_BASE=https://YOUR-SERVICE.onrender.com
+   FAMFIN_AI_GATEWAY=https://YOUR-SERVICE.onrender.com
+
+DO NOT DELETE THE OLD BACKUP until auth, database CRUD and AI chat all pass.

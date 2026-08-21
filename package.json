@@ -1,22 +1,28 @@
 {
-  "name": "famfin-ai-gateway-render",
-  "version": "0.2.0",
+  "name": "famfin-unified-api",
+  "version": "1.0.0",
   "private": true,
-  "description": "FamFin Flutter AI middleware for Render, OpenAI Responses API, and MongoDB Atlas",
-  "main": "server.js",
-  "type": "commonjs",
-  "engines": {
-    "node": ">=20"
-  },
+  "description": "Unified FamFin Data/Auth API and AI Gateway for Render",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "check": "node --check server.js"
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/routes.js && node --check src/records.js && node --check src/specials.js && node --check src/auth.js && node --check src/ai-gateway.mjs",
+    "init-db": "node init-db.js",
+    "verify-db": "node verify-db.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.0",
-    "express": "^5.0.0",
-    "mongodb": "^6.0.0"
+    "bcryptjs": "3.0.3",
+    "dotenv": "17.2.3",
+    "express": "5.2.1",
+    "google-auth-library": "11.0.2",
+    "jose": "6.2.9",
+    "jsonwebtoken": "9.0.3",
+    "mongodb": "7.5.0",
+    "multer": "2.2.0",
+    "openai": "7.5.0",
+    "pdfkit": "0.19.1"
   }
 }

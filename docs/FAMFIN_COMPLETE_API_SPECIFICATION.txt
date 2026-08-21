@@ -1,0 +1,1457 @@
+================================================================================
+FAMFIN — COMPLETE API SPECIFICATION
+Request / response for every endpoint and every collection
+Companion to: database_schema.txt
+================================================================================
+
+HOW TO READ THIS FILE
+--------------------------------------------------------------------------------
+This is not a proposal. Both sides of this contract already exist in the repo:
+
+    server/src/routes.js              the routes
+    lib/services/data/api_client.dart the client that calls them
+    lib/services/data/record_repository.dart  the only caller of that client
+    lib/services/auth/auth_backend.dart       the identity calls
+
+Anything you build that differs from this file will not be called by the app.
+
+TWO PREFIXES — this is deliberate and the client already sends it this way:
+
+    Identity   {BASE}/v1/auth/...      (no /api)
+    Data       {BASE}/api/...
+
+BASE comes from --dart-define=FAMFIN_API_BASE=https://your-host
+There is no trailing slash.
+
+TOTAL SURFACE
+    7  identity endpoints
+    1  health endpoint
+    5  generic record endpoints   <- these 5 serve all 34 collections
+    4  special data endpoints
+    ---
+    17 endpoints to build. Not 170.
+
+LEGEND
+    *          required in request
+    money      decimal STRING, e.g. "1234.56" — never a JSON number
+    cal        "YYYY-MM-DD" string
+    date       ISO-8601 timestamp string, e.g. "2026-03-14T09:20:00.000Z"
+    oid        24-char hex ObjectId string
+    →          response
+
+
+================================================================================
+PART 0 — UNIVERSAL CONTRACT
+================================================================================
+
+0.1  RESPONSE ENVELOPE
+--------------------------------------------------------------------------------
+Every /api response except health uses exactly this shape. The client reads
+body.success first and nothing else until it has.
+
+SUCCESS
+{
+  "success": true,
+  "data": { ... }  or  [ ... ],
+  "meta": { "nextCursor": "eyJ...", "hasMore": true }
+}
+
+meta is optional and only present on list endpoints.
+
+FAILURE
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Enter an amount greater than zero.",
+    "field": "amount"
+  }
+}
+
+VERSION CONFLICT — adds a top-level "remote" holding the current server record,
+so the user can see what changed instead of being told to try again:
+{
+  "success": false,
+  "error": {
+    "code": "VERSION_CONFLICT",
+    "message": "This information was changed on another device. Refresh and review the latest version."
+  },
+  "remote": { "_id": "...", "version": 7, "amount": "1500.00", ... }
+}
+
+message is shown to a human. Write it as a sentence a person can act on.
+Never put a driver error, a stack trace or a field path in it.
+
+
+0.2  ERROR CODES THE CLIENT BRANCHES ON
+--------------------------------------------------------------------------------
+CODE                HTTP  CLIENT BEHAVIOUR
+VALIDATION_ERROR    400   shows message against error.field
+UNAUTHENTICATED     401   treated as auth problem, prompts sign-in
+STEP_UP_REQUIRED    401   prompts password re-entry, retries with x-step-up
+FORBIDDEN           403   treated as auth problem
+NOT_FOUND           404   "That record no longer exists."
+NOT_READY           404   export not finished
+EXPIRED             410   export link dead, offer to re-create
+VERSION_CONFLICT    409   shows remote record, user chooses
+VERSION_REQUIRED    428   client bug — it must send If-Match
+RATE_LIMITED        429
+INTERNAL_ERROR      500   fixed message, see below
+
+The 500 message is fixed and must not vary:
+    "Unable to save right now. Your information was not lost. Please retry."
+
+
+0.3  REQUEST HEADERS THE CLIENT SENDS
+--------------------------------------------------------------------------------
+content-type: application/json
+authorization: Bearer {accessToken}        when signed in
+x-app-token: {FAMFIN_APP_TOKEN}            when the build defines one
+x-correlation-id: 1742901234567-12         every request, unique
+if-match: 7                                PUT only — the version
+x-step-up: verified                        only after password re-confirmation
+
+CORS — get this right on day one. Custom headers force a preflight, and a
+missing entry here fails the call before your handler ever runs:
+
+  Access-Control-Allow-Headers:
+      authorization, content-type, x-app-token, x-correlation-id,
+      if-match, x-step-up
+  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+  Access-Control-Expose-Headers: etag
+
+  OPTIONS must return 204 BEFORE any authentication middleware.
+  An OPTIONS request carries no Authorization header — if auth runs first it
+  returns 401 and the browser never sends the real request.
+
+
+0.4  MONEY
+--------------------------------------------------------------------------------
+Money is a STRING in both directions.
+
+  SEND      "amount": "1499.50"
+  RECEIVE   "amount": "1499.50"
+  NEVER     "amount": 1499.5
+
+Server converts to Decimal128 on write and back to string on read.
+0.1 + 0.2 in IEEE-754 double is 0.30000000000000004. In a finance app that is
+a correctness bug, not a rounding preference.
+
+Non-money numbers stay numbers: version, pageCount, tenureMonths, dayOfMonth,
+confidence, percentages.
+
+
+0.5  OPTIMISTIC CONCURRENCY (PUT only)
+--------------------------------------------------------------------------------
+Every mutable record has an integer "version", starting at 1.
+
+Client sends the version it displayed, as If-Match (or body.version).
+
+  no version sent      → 428 VERSION_REQUIRED
+  version matches      → apply, $inc version by 1, return updated record
+  version differs      → 409 VERSION_CONFLICT + "remote": current record
+
+Never overwrite. Two people editing one household is the normal case, not the
+edge case.
+
+
+0.6  SOFT DELETE
+--------------------------------------------------------------------------------
+DELETE sets isDeleted: true and deletedAt, and returns:
+    { "success": true, "data": { "deleted": true } }
+
+Every read query must filter { isDeleted: { $ne: true } }.
+Financial history must survive deletion — a deleted expense still belonged to
+a closed month that was already reported on.
+
+
+0.7  TENANCY — THE ONE RULE THAT CANNOT SLIP
+--------------------------------------------------------------------------------
+Every household-scoped query filters householdId FIRST, from the URL path,
+after verifying the caller is a member of that household.
+
+Never take householdId from the request body. A body-supplied householdId is
+how one household reads another's finances.
+
+
+================================================================================
+PART 1 — IDENTITY   {BASE}/v1/auth/*
+================================================================================
+No /api prefix. These are the only endpoints callable without a bearer token
+(except refresh, sign-out and delete, which need one).
+
+THE SESSION OBJECT — returned by sign-up, sign-in, oauth and refresh.
+Returned at the TOP LEVEL, not inside a success envelope. The auth client
+parses the raw body.
+
+{
+  "user": {
+    "id": "665f1a2b3c4d5e6f7a8b9c0d",
+    "email": "asha@example.com",
+    "displayName": "Asha",
+    "localeCode": "en_IN",
+    "lastSignInAt": "2026-03-14T09:20:00.000Z"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "def50200a1b2c3...",
+  "expiresAt": "2026-03-14T10:20:00.000Z",
+  "deviceId": "web-chrome-1742901234"
+}
+
+AUTH ERRORS use a FLAT body with a "code" key — not the /api envelope:
+{ "code": "email_taken", "message": "That email is already registered." }
+
+Recognised codes: email_taken, weak_password, rate_limited
+Anything else falls back on status: 401/403 → invalid credentials, 429 → rate
+limited.
+
+
+1.1  POST /v1/auth/sign-up
+--------------------------------------------------------------------------------
+REQUEST
+{
+  "email": "asha@example.com",       * lowercased by the client already
+  "password": "correct horse battery",  *
+  "displayName": "Asha",             *
+  "locale": "en_IN",
+  "acceptedTerms": true              *
+}
+→ 201  session object
+→ 409  { "code": "email_taken", ... }
+→ 400  { "code": "weak_password", ... }
+
+Also create: a users row, a user_identities row (provider EMAIL), and a
+user_preferences row with defaults. Do NOT create a household here — that is
+an explicit step so the user can also be invited into an existing one.
+
+
+1.2  POST /v1/auth/sign-in
+--------------------------------------------------------------------------------
+REQUEST   { "email": "asha@example.com", "password": "..." }
+→ 200  session object
+→ 401  { "code": "invalid_credentials" }
+→ 429  { "code": "rate_limited" }
+
+Update users.lastLoginAt. Rate-limit per email AND per IP.
+
+
+1.3  POST /v1/auth/oauth
+--------------------------------------------------------------------------------
+REQUEST   { "provider": "google", "idToken": "eyJ..." }
+provider ∈ google | apple
+→ 200  session object
+→ 401  token failed verification
+
+Verify the token against the provider's public keys server-side. Never trust a
+client-supplied email. Match or create user_identities on
+(provider, providerSubject).
+
+
+1.4  POST /v1/auth/refresh
+--------------------------------------------------------------------------------
+HEADER    authorization: Bearer {expired or expiring accessToken}
+REQUEST   { "refreshToken": "def50200..." }
+→ 200  new session object (rotate the refresh token)
+→ 401  refresh token revoked or expired → client signs the user out
+
+Rotate on every refresh. If a rotated token is presented again, revoke the
+whole family — that is a stolen-token signal.
+
+
+1.5  POST /v1/auth/reset
+--------------------------------------------------------------------------------
+REQUEST   { "email": "asha@example.com" }
+→ 200  ALWAYS, empty body
+
+Return 200 whether or not the account exists. A 404 here tells an attacker
+which email addresses are registered. The client ignores the response entirely.
+
+
+1.6  POST /v1/auth/sign-out
+--------------------------------------------------------------------------------
+HEADER    authorization: Bearer {accessToken}
+BODY      none
+→ 200
+
+Revoke the refresh token family. The client clears local state regardless of
+the outcome, so never fail loudly here.
+
+
+1.7  DELETE /v1/auth/account
+--------------------------------------------------------------------------------
+HEADER    authorization: Bearer {accessToken}
+→ 200
+
+Deletion is not immediate erasure: set users.status = DELETED, revoke tokens,
+and queue the purge. If the user is the sole HOUSEHOLD_ADMIN of a household
+with other active members, return 409 and require transfer first — otherwise
+you orphan a family's financial history.
+
+
+================================================================================
+PART 2 — HEALTH
+================================================================================
+
+2.1  GET /api/health/database
+--------------------------------------------------------------------------------
+No auth. Not the envelope shape. Deliberately contentless.
+
+→ 200  { "database": "connected" }
+→ 503  { "database": "unavailable" }
+
+The client reads only body.database == "connected". Do not add version numbers,
+hostnames, or counts — an unauthenticated endpoint should reveal nothing.
+
+
+================================================================================
+PART 3 — THE GENERIC RECORD API
+================================================================================
+These five endpoints serve all 34 collections. :collection is a path parameter
+validated against the allow-list in PART 4.
+
+    GET    /api/households/:householdId/:collection
+    GET    /api/households/:householdId/:collection/:id
+    POST   /api/households/:householdId/:collection
+    PUT    /api/households/:householdId/:collection/:id
+    DELETE /api/households/:householdId/:collection/:id
+
+
+3.1  LIST
+--------------------------------------------------------------------------------
+GET /api/households/{hid}/{collection}?limit=25&cursor={c}&status={s}
+
+QUERY
+  limit    int, default 25, cap at 100 server-side
+  cursor   opaque string from the previous meta.nextCursor
+  status   optional exact match on the status field
+
+→ 200
+{
+  "success": true,
+  "data": [ { record }, { record } ],
+  "meta": { "nextCursor": "eyJfaWQiOiI2NjVmLi4uIn0", "hasMore": true }
+}
+
+Empty is success with an empty array, never 404.
+When hasMore is false, nextCursor must be null.
+
+CURSOR: base64 of the last row's sort key + _id. Do NOT use skip/offset —
+offset pagination silently repeats or drops rows when a record is inserted
+mid-scroll, which in a finance list means a duplicated transaction on screen.
+
+DEFAULT SORT — the client depends on these:
+  expenses          expenseDate    desc
+  transactions      transactionDate desc
+  bill_instances    dueDate        asc
+  audit_findings    detectedAt     desc
+  notifications     readAt asc, createdAt desc   (unread first)
+  everything else   createdAt      desc
+
+
+3.2  GET ONE
+--------------------------------------------------------------------------------
+GET /api/households/{hid}/{collection}/{id}
+→ 200  { "success": true, "data": { record } }
+→ 404  NOT_FOUND — also when the row exists but isDeleted, and also when it
+       belongs to another household. Never 403 on a cross-household id: a 403
+       confirms the record exists.
+
+
+3.3  CREATE
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/{collection}
+BODY: the record fields only. Do NOT send _id, householdId, version,
+createdAt, createdBy — the server sets all of them and must ignore them if
+sent.
+
+→ 201  { "success": true, "data": { full saved record including _id } }
+→ 400  VALIDATION_ERROR with field
+
+The server always returns the complete stored record, not an id. The client
+puts that object straight into its list.
+
+Server-side on create:
+  - set householdId from the PATH
+  - version = 1, isDeleted = false
+  - createdAt = updatedAt = now, createdBy = updatedBy = caller
+  - convert every money field to Decimal128
+  - write a domain_events row: {COLLECTION}_CREATED
+  - enqueue background job SEARCH_INDEX_UPDATE
+All of it in ONE transaction. A record that exists but is unsearchable is a
+record the user cannot find.
+
+
+3.4  UPDATE
+--------------------------------------------------------------------------------
+PUT /api/households/{hid}/{collection}/{id}
+HEADER  if-match: 7          (or body.version: 7)
+BODY    changed fields (a full-object PUT is also accepted)
+
+→ 200  { "success": true, "data": { updated record, version now 8 } }
+→ 428  VERSION_REQUIRED
+→ 409  VERSION_CONFLICT + "remote"
+→ 404  NOT_FOUND
+
+Ignore any attempt to change householdId, _id, createdAt or createdBy.
+
+
+3.5  DELETE
+--------------------------------------------------------------------------------
+DELETE /api/households/{hid}/{collection}/{id}
+→ 200  { "success": true, "data": { "deleted": true } }
+→ 404  NOT_FOUND
+
+Soft only. Emit {COLLECTION}_DELETED and remove the search_documents row.
+
+
+3.6  PERMISSIONS — DERIVED, NOT PER-ROUTE
+--------------------------------------------------------------------------------
+permission = PERMISSION_ENTITY[collection] + "." + action
+action ∈ read | create | update | delete
+
+collection                  entity        collection                entity
+family_members              family        loans                     loan
+income_sources              income        loan_payments             loan
+income_events               income        liabilities               loan
+salary_structures           salary        credit_cards              card
+salary_components           salary        investments               investment
+employer_benefits           benefit       investment_transactions   investment
+benefit_claims              benefit       assets                    investment
+accounts                    account       goals                     goal
+transactions                transaction   goal_contributions        goal
+expenses                    expense       emergency_fund_plans      goal
+expense_categories          expense       insurance_policies        insurance
+bill_definitions            bill          documents                 document
+bill_instances              bill          audit_findings            audit
+budgets                     budget        notifications             audit
+budget_periods              budget        decision_journal_entries  household
+budget_buckets              budget        life_events               household
+allocation_plans            budget        financial_snapshots       budget
+
+Look up role_permissions for the caller's role in household_users.
+
+VISIBILITY FILTER — applied on top of permissions, on every read:
+  visibility = HOUSEHOLD              → visible to all members
+  visibility = PRIVATE                → only ownerMemberId
+  visibility = SHARED_WITH_SELECTED   → ownerMemberId + record_shares rows
+  visibility = ADMIN_ONLY             → HOUSEHOLD_ADMIN only
+
+
+================================================================================
+PART 4 — EVERY COLLECTION: REQUEST AND RESPONSE
+================================================================================
+34 collections. Field lists are the CREATE body. The response is always the
+same object plus _id, householdId, version, createdAt, updatedAt, createdBy,
+updatedBy, isDeleted.
+
+Anything not in this list must return 404 from guardCollection WITHOUT
+touching the database. The URL is otherwise a way to probe your schema.
+
+
+--------------------------------------------------------------------------------
+4.1  family_members
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/family_members
+{
+  "name": "Asha",                    *
+  "relationship": "SELF",            SELF|SPOUSE|CHILD|PARENT|SIBLING|OTHER
+  "dateOfBirth": "1990-04-12",
+  "employmentStatus": "EMPLOYED",
+  "financialRole": "EARNER",         EARNER|DEPENDENT|CONTRIBUTOR
+  "dependencyStatus": "INDEPENDENT",
+  "linkedUserId": null,
+  "visibility": "HOUSEHOLD"
+}
+→ 201
+{ "success": true, "data": {
+    "_id": "665f1a2b3c4d5e6f7a8b9c0d",
+    "householdId": "665f0000...", "name": "Asha", "relationship": "SELF",
+    "dateOfBirth": "1990-04-12", "financialRole": "EARNER",
+    "status": "ACTIVE", "version": 1, "isDeleted": false,
+    "createdAt": "2026-03-14T09:20:00.000Z",
+    "updatedAt": "2026-03-14T09:20:00.000Z",
+    "createdBy": "665fuser..." } }
+
+Exactly one member per household should have relationship SELF. Enforce it —
+the app uses SELF to decide whose salary is "yours".
+
+
+--------------------------------------------------------------------------------
+4.2  income_sources
+--------------------------------------------------------------------------------
+{
+  "type": "SALARY",              SALARY|BUSINESS|FREELANCE|RENTAL|INTEREST|
+                                 DIVIDEND|PENSION|OTHER
+  "name": "Infosys monthly",     *
+  "employerName": "Infosys",
+  "amount": "85000.00",          money
+  "currency": "INR",
+  "frequency": "MONTHLY",        MONTHLY|WEEKLY|FORTNIGHTLY|QUARTERLY|
+                                 ANNUAL|IRREGULAR
+  "expectedDateRule": { "dayOfMonth": 1, "weekendRule": "PREVIOUS_WORKING_DAY" },
+  "reliability": "GUARANTEED",   GUARANTEED|LIKELY|VARIABLE
+  "confidence": 0.95,            number 0-1, NOT money
+  "startDate": "2024-06-01",
+  "endDate": null,
+  "isVariable": false,
+  "includeInBudget": true,
+  "isReimbursement": false,
+  "ownerMemberId": "665fmember...",
+  "visibility": "HOUSEHOLD"
+}
+
+If isVariable is true, default includeInBudget to false. Budgeting a bonus you
+might not receive is how a household overcommits.
+
+
+--------------------------------------------------------------------------------
+4.3  income_events
+--------------------------------------------------------------------------------
+{
+  "incomeSourceId": "665fsrc...",  *
+  "memberId": "665fmember...",
+  "expectedAmount": "85000.00",
+  "actualAmount": "85000.00",
+  "expectedDate": "2026-03-01",
+  "receivedDate": "2026-03-01",
+  "accountId": "665facc...",
+  "status": "RECEIVED",   EXPECTED|RECEIVED|PARTIAL|DELAYED|MISSED|CANCELLED
+  "varianceReason": null,
+  "currency": "INR"
+}
+
+Reports use actualAmount where status is RECEIVED. Never expectedAmount —
+that is the difference between what you earn and what you were promised.
+
+
+--------------------------------------------------------------------------------
+4.4  salary_structures
+--------------------------------------------------------------------------------
+{
+  "memberId": "665fmember...",
+  "employmentId": "665femp...",
+  "effectiveFrom": "2026-04-01",   *
+  "effectiveTo": null,
+  "grossMonthly": "104000.00",
+  "takeHomeMonthly": "85000.00",
+  "mode": "DETAILED",              SIMPLE|DETAILED
+  "currency": "INR"
+}
+
+APPEND-ONLY. A raise creates a NEW row and closes the previous one by setting
+its effectiveTo. Never PUT a new amount onto last year's structure — an old
+payslip must still reconcile against the structure that was live then.
+
+
+--------------------------------------------------------------------------------
+4.5  salary_components
+--------------------------------------------------------------------------------
+{
+  "salaryStructureId": "665fstruct...",  *
+  "componentType": "EARNING",    * EARNING|DEDUCTION|EMPLOYER_CONTRIBUTION
+  "name": "Basic",               *
+  "amount": "42000.00",
+  "calculationType": "FIXED",    FIXED|PERCENTAGE|FORMULA
+  "percentageOf": null,
+  "isTaxable": true,
+  "isStatutory": false,
+  "linkedBenefitId": null,
+  "displayOrder": 1
+}
+
+linkedBenefitId is the double-count guard: employer PF appears as a component
+AND as an employer_benefit. Linked, it is counted once.
+
+
+--------------------------------------------------------------------------------
+4.6  employer_benefits
+--------------------------------------------------------------------------------
+{
+  "memberId": "665fmember...",
+  "employmentId": "665femp...",
+  "name": "Group health cover",   *
+  "benefitType": "HEALTH_INSURANCE",
+  "classification": "COVERAGE",   CONTRIBUTION|COVERAGE|REIMBURSEMENT|
+                                  ALLOWANCE|COMPANY_PROVIDED|LONG_TERM
+  "provider": "Star Health",
+  "eligibleAmount": null,
+  "coverageAmount": "500000.00",
+  "frequency": "ANNUAL",
+  "startDate": "2026-04-01",
+  "expiryDate": "2027-03-31",
+  "linkedSalaryDeductionId": null,
+  "carryForward": false,
+  "currency": "INR"
+}
+
+coverageAmount is PROTECTION. It must never be summed into net worth.
+
+
+--------------------------------------------------------------------------------
+4.7  benefit_claims
+--------------------------------------------------------------------------------
+{
+  "benefitId": "665fben...",     *
+  "eligibleAmount": "25000.00",
+  "claimedAmount": "18000.00",
+  "approvedAmount": "16500.00",
+  "receivedAmount": "16500.00",
+  "remainingAmount": "7000.00",
+  "claimDate": "2026-02-10",
+  "approvedDate": "2026-02-20",
+  "receivedDate": "2026-03-01",
+  "linkedExpenseIds": ["665fexp..."],
+  "rejectionReason": null,
+  "status": "RECEIVED",
+  "currency": "INR"
+}
+
+Four separate amounts on purpose. claimed ≠ approved ≠ received, and the gap
+is money the household was owed and did not get. Collapsing them hides it.
+
+
+--------------------------------------------------------------------------------
+4.8  accounts
+--------------------------------------------------------------------------------
+{
+  "name": "HDFC Salary",         *
+  "accountType": "SALARY",       SAVINGS|CURRENT|SALARY|CASH|WALLET|
+                                 FIXED_DEPOSIT|OTHER
+  "institution": "HDFC Bank",
+  "maskedAccountNumber": "4821",  LAST 4 ONLY
+  "openingBalance": "50000.00",
+  "currentBalance": "62430.75",
+  "balanceAsOf": "2026-03-14T00:00:00.000Z",
+  "isPrimary": true,
+  "currency": "INR",
+  "ownerMemberId": "665fmember...",
+  "visibility": "HOUSEHOLD"
+}
+
+REJECT with 400 if maskedAccountNumber is longer than 4 characters. Do not
+silently truncate — the client sent a full account number and needs to know.
+
+
+--------------------------------------------------------------------------------
+4.9  transactions
+--------------------------------------------------------------------------------
+{
+  "accountId": "665facc...",
+  "transactionType": "EXPENSE",  * INCOME|EXPENSE|TRANSFER|REFUND|
+                                   REIMBURSEMENT|LOAN_PAYMENT|INVESTMENT|
+                                   ADJUSTMENT
+  "amount": "1240.00",
+  "currency": "INR",
+  "transactionDate": "2026-03-12T00:00:00.000Z",  *
+  "description": "SWIGGY ORDER 88421",
+  "merchant": "Swiggy",
+  "linkedEntityType": "expenses",
+  "linkedEntityId": "665fexp...",
+  "importReference": "HDFC-2026-03-12-88421",
+  "balanceAfter": "61190.75"
+}
+
+importReference is the duplicate-import guard and needs a SPARSE UNIQUE index
+per household. Statement import relies on it: without it, re-importing March
+doubles March.
+
+
+--------------------------------------------------------------------------------
+4.10  expense_categories
+--------------------------------------------------------------------------------
+{
+  "name": "Groceries",           *
+  "parentCategoryId": "665fcat...",   two levels only, no deeper
+  "icon": "shopping_cart",
+  "colorHex": "#4CAF50",
+  "systemCategory": false,
+  "categoryGroup": "FOOD",       HOUSING|UTILITIES|FOOD|TRANSPORT|FAMILY|
+                                 HEALTH|LIFESTYLE|FINANCIAL|SUBSCRIPTIONS|
+                                 EDUCATION|OTHER
+  "isActive": true,
+  "displayOrder": 3
+}
+
+LIST must return system categories (householdId null) AND the household's own:
+    { $or: [ { householdId: hid }, { householdId: null } ] }
+A system category cannot be updated or deleted — return 403.
+
+
+--------------------------------------------------------------------------------
+4.11  expenses
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/expenses
+{
+  "paidByMemberId": "665fmember...",
+  "beneficiaryMemberIds": ["665fchild..."],
+  "accountId": "665facc...",
+  "amount": "1240.00",           money, in the currency actually paid
+  "currency": "INR",
+  "baseAmount": "1240.00",       converted to household base currency
+  "baseCurrency": "INR",
+  "fxRate": "1.0",
+  "expenseDate": "2026-03-12T00:00:00.000Z",  *
+  "merchant": "Swiggy",
+  "description": "Dinner",
+  "categoryId": "665fcat...",
+  "subcategoryId": null,
+  "ownership": "HOUSEHOLD",      PERSONAL|SHARED|HOUSEHOLD
+  "nature": "VARIABLE",          FIXED|VARIABLE
+  "costType": "DISCRETIONARY",   ESSENTIAL|DISCRETIONARY
+  "planningType": "UNPLANNED",   PLANNED|UNPLANNED
+  "spendingType": "WANT",        NEED|WANT
+  "priority": "LOW",
+  "paymentMethod": "UPI",        CASH|CARD|UPI|NETBANKING|AUTO_DEBIT
+  "reimbursementStatus": "NOT_APPLICABLE",
+  "receiptDocumentId": null,
+  "tags": ["weekend"],
+  "source": "MANUAL",            MANUAL|IMPORT|OCR|AI|SYSTEM
+  "visibility": "HOUSEHOLD"
+}
+→ 201 full record
+
+fxRate is STORED, not looked up at read time. Re-converting a 2024 expense at
+today's rate silently rewrites last year's reports.
+
+The five classification axes are independent, not one "type". Rent is FIXED +
+ESSENTIAL + PLANNED + NEED + HOUSEHOLD. Collapsed into one field, the app can
+no longer answer "what could I actually cut".
+
+
+--------------------------------------------------------------------------------
+4.12  bill_definitions
+--------------------------------------------------------------------------------
+{
+  "name": "Electricity",         *
+  "provider": "BESCOM",
+  "categoryId": "665fcat...",
+  "expectedAmount": "2100.00",
+  "currency": "INR",
+  "recurrence": "MONTHLY",       MONTHLY|QUARTERLY|ANNUAL|CUSTOM
+  "dueDateRule": { "dayOfMonth": 18 },
+  "payerMemberId": "665fmember...",
+  "accountId": "665facc...",
+  "autoPay": true,
+  "reminderRules": [ { "daysBefore": 3, "channel": "PUSH" } ]
+}
+
+The template. It never holds a paid state — instances do.
+
+
+--------------------------------------------------------------------------------
+4.13  bill_instances
+--------------------------------------------------------------------------------
+{
+  "billDefinitionId": "665fbill...",  *
+  "period": "2026-03",                * "YYYY-MM"
+  "expectedAmount": "2100.00",
+  "actualAmount": null,
+  "dueDate": "2026-03-18",
+  "paidDate": null,
+  "linkedExpenseId": null,
+  "sourceDocumentId": null,
+  "status": "DUE",              DUE|PAID|OVERDUE|SKIPPED|PARTIAL
+  "currency": "INR"
+}
+
+UNIQUE INDEX on (householdId, billDefinitionId, period). That index is the
+entire safety mechanism for the generator job: a retry cannot create a second
+March electricity bill.
+
+Do not mark paid through PUT. Use 5.1.
+
+
+--------------------------------------------------------------------------------
+4.14  budgets
+--------------------------------------------------------------------------------
+{
+  "name": "2026 household budget",  *
+  "method": "FIFTY_THIRTY_TWENTY",  ZERO_BASED|FIFTY_THIRTY_TWENTY|
+                                    ENVELOPE|CUSTOM
+  "recurrence": "MONTHLY",
+  "isActive": true,
+  "startDate": "2026-01-01"
+}
+
+--------------------------------------------------------------------------------
+4.15  budget_periods
+--------------------------------------------------------------------------------
+{
+  "budgetId": "665fbud...",     *
+  "periodStart": "2026-03-01T00:00:00.000Z",  *
+  "periodEnd": "2026-03-31T00:00:00.000Z",    *
+  "plannedIncome": "85000.00",
+  "plannedExpense": "62000.00",
+  "actualIncome": "85000.00",
+  "actualExpense": "58430.00",
+  "status": "ACTIVE"            DRAFT|ACTIVE|CLOSED
+}
+
+actual* are recomputed by a job, not written by the client. Accept them on
+create for seeding, then own them server-side.
+
+--------------------------------------------------------------------------------
+4.16  budget_buckets
+--------------------------------------------------------------------------------
+{
+  "budgetPeriodId": "665fper...",  *
+  "categoryId": "665fcat...",
+  "plannedAmount": "12000.00",
+  "actualAmount": "9840.00",
+  "carryForward": true,
+  "rolloverAmount": "2160.00"
+}
+
+--------------------------------------------------------------------------------
+4.17  allocation_plans
+--------------------------------------------------------------------------------
+{
+  "name": "March surplus",
+  "totalAmount": "22000.00",
+  "planDate": "2026-03-05",
+  "status": "ACTIVE"
+}
+
+allocation_items is NOT exposed. Accept the items array nested on the plan, or
+expose it — but the client currently only addresses the plan.
+
+
+--------------------------------------------------------------------------------
+4.18  loans
+--------------------------------------------------------------------------------
+{
+  "name": "Home loan",           *
+  "loanType": "HOME",            HOME|AUTO|PERSONAL|EDUCATION|GOLD|
+                                 BUSINESS|OTHER
+  "lender": "SBI",
+  "borrowerMemberIds": ["665fmember..."],
+  "originalPrincipal": "4500000.00",
+  "outstandingPrincipal": "3812400.00",
+  "interestRate": "8.65",        decimal STRING, annual percent
+  "interestType": "FLOATING",    FIXED|FLOATING|REDUCING|FLAT
+  "emiAmount": "38200.00",
+  "tenureMonths": 240,           number
+  "remainingMonths": 197,        number
+  "startDate": "2022-08-01",
+  "expectedEndDate": "2042-07-01",
+  "dueDay": 5,                   number 1-31
+  "accountId": "665facc...",
+  "currency": "INR"
+}
+
+--------------------------------------------------------------------------------
+4.19  loan_payments
+--------------------------------------------------------------------------------
+{
+  "loanId": "665floan...",       *
+  "paymentDate": "2026-03-05T00:00:00.000Z",  *
+  "totalAmount": "38200.00",
+  "principalComponent": "10850.00",
+  "interestComponent": "27350.00",
+  "extraPayment": "0.00",
+  "outstandingAfter": "3801550.00",
+  "paymentType": "EMI",          EMI|PREPAYMENT|FORECLOSURE
+  "linkedTransactionId": "665ftxn..."
+}
+
+The principal/interest split is STORED, never recalculated on read. On a
+floating-rate loan, recalculating retrospectively produces a number that never
+happened.
+
+
+--------------------------------------------------------------------------------
+4.20  credit_cards
+--------------------------------------------------------------------------------
+{
+  "issuer": "HDFC",
+  "nickname": "Regalia",
+  "maskedCardNumber": "7731",    LAST 4 ONLY
+  "creditLimit": "300000.00",
+  "outstanding": "42150.00",
+  "minimumDue": "2110.00",
+  "totalDue": "42150.00",
+  "statementDay": 8,             number 1-31
+  "dueDay": 26,                  number 1-31
+  "interestRate": "42.00",
+  "currency": "INR",
+  "ownerMemberId": "665fmember..."
+}
+
+Available credit (limit − outstanding) is NOT wealth. Never sum it into net
+worth, and never return it as an asset.
+
+
+--------------------------------------------------------------------------------
+4.21  investments
+--------------------------------------------------------------------------------
+{
+  "investmentType": "MUTUAL_FUND",  MUTUAL_FUND|STOCK|FD|RD|PPF|EPF|NPS|
+                                    BOND|GOLD|CRYPTO|REAL_ESTATE|OTHER
+  "name": "Parag Parikh Flexi Cap", *
+  "provider": "PPFAS",
+  "accountReferenceMasked": "9021",
+  "totalContribution": "240000.00",
+  "currentValue": "318500.00",
+  "liquidity": "LIQUID",         LIQUID|SEMI_LIQUID|LOCKED
+  "maturityDate": null,
+  "expectedReturnAssumption": 12.0,   number — the USER's assumption
+  "riskLabel": "HIGH",
+  "sipAmount": "10000.00",
+  "sipDay": 5,
+  "currency": "INR",
+  "ownerMemberId": "665fmember..."
+}
+
+expectedReturnAssumption is the user's own figure. The server must never
+supply a market rate — a projection the app invented is a promise it cannot
+keep.
+
+
+--------------------------------------------------------------------------------
+4.22  investment_transactions
+--------------------------------------------------------------------------------
+{
+  "investmentId": "665finv...",  *
+  "transactionDate": "2026-03-05T00:00:00.000Z",  *
+  "transactionType": "SIP",      BUY|SELL|SIP|DIVIDEND|INTEREST|BONUS|MATURITY
+  "amount": "10000.00",
+  "units": "142.8571",           decimal STRING — 4+ dp, never a double
+  "pricePerUnit": "70.00",
+  "charges": "0.00",
+  "linkedTransactionId": "665ftxn..."
+}
+
+--------------------------------------------------------------------------------
+4.23  assets
+--------------------------------------------------------------------------------
+{
+  "name": "Honda City",          *
+  "assetType": "VEHICLE",        PROPERTY|VEHICLE|JEWELLERY|EQUIPMENT
+  "purchaseValue": "1150000.00",
+  "currentValue": "720000.00",
+  "purchaseDate": "2021-11-02",
+  "valuationDate": "2026-01-01",
+  "depreciationRate": 12.5
+}
+
+--------------------------------------------------------------------------------
+4.24  liabilities
+--------------------------------------------------------------------------------
+{
+  "name": "Owed to brother",     *
+  "liabilityType": "INFORMAL_LOAN",  INFORMAL_LOAN|PAYABLE|TAX_DUE|OTHER
+  "amount": "50000.00",
+  "counterparty": "Ravi",
+  "dueDate": "2026-06-30",
+  "currency": "INR"
+}
+
+For debts that are not structured loans. Counted in net worth; not in EMI
+obligations, because there is no schedule.
+
+
+--------------------------------------------------------------------------------
+4.25  goals
+--------------------------------------------------------------------------------
+{
+  "name": "Ananya college fund",  *
+  "goalType": "EDUCATION",       EDUCATION|RETIREMENT|HOME|VEHICLE|TRAVEL|
+                                 WEDDING|EMERGENCY|OTHER
+  "ownerMemberIds": ["665fmember..."],
+  "beneficiaryMemberIds": ["665fchild..."],
+  "targetAmount": "2500000.00",
+  "currentAmount": "480000.00",
+  "targetDate": "2034-06-01",
+  "priority": "HIGH",
+  "monthlyContribution": "15000.00",
+  "linkedInvestmentIds": ["665finv..."],
+  "inflationRate": 6.0,
+  "currency": "INR"
+}
+
+--------------------------------------------------------------------------------
+4.26  goal_contributions
+--------------------------------------------------------------------------------
+{
+  "goalId": "665fgoal...",       *
+  "contributionDate": "2026-03-05T00:00:00.000Z",  *
+  "amount": "15000.00",
+  "contributorMemberId": "665fmember...",
+  "sourceType": "SIP",           MANUAL|SIP|WINDFALL|INVESTMENT_CLOSURE
+  "linkedTransactionId": "665ftxn..."
+}
+
+On create, $inc goals.currentAmount in the SAME transaction. A contribution
+that saves but does not move the goal makes the user record it twice.
+
+
+--------------------------------------------------------------------------------
+4.27  emergency_fund_plans
+--------------------------------------------------------------------------------
+{
+  "targetMonths": 6,             number, typically 3-6
+  "monthlyExpenseBasis": "62000.00",
+  "targetAmount": "372000.00",
+  "currentAmount": "150000.00",
+  "linkedAccountIds": ["665facc..."],
+  "status": "ACTIVE"
+}
+
+UNIQUE per household. A second POST must return 409, not create a rival plan.
+
+
+--------------------------------------------------------------------------------
+4.28  insurance_policies
+--------------------------------------------------------------------------------
+{
+  "policyType": "TERM_LIFE",     TERM_LIFE|HEALTH|MOTOR|HOME|TRAVEL|
+                                 CRITICAL_ILLNESS|ACCIDENT|OTHER
+  "provider": "LIC",
+  "policyReferenceMasked": "4417",
+  "policyHolderMemberId": "665fmember...",
+  "coveredMemberIds": ["665fmember...", "665fspouse..."],
+  "coverageAmount": "10000000.00",
+  "premiumAmount": "18400.00",
+  "premiumFrequency": "ANNUAL",
+  "startDate": "2023-05-10",
+  "expiryDate": "2053-05-09",
+  "renewalDate": "2027-05-10",
+  "documentId": "665fdoc...",
+  "currency": "INR"
+}
+
+coverageAmount is protection, never net worth. A ₹1 crore term policy does not
+make a household a crorepati.
+
+
+--------------------------------------------------------------------------------
+4.29  decision_journal_entries
+--------------------------------------------------------------------------------
+{
+  "decisionDate": "2026-03-01T00:00:00.000Z",  *
+  "title": "Prepay home loan or invest",       *
+  "context": "Bonus of 2L received",
+  "decision": "Split 50/50",
+  "expectedOutcome": "Save ~4L interest",
+  "actualOutcome": null,
+  "reviewDate": "2027-03-01",
+  "linkedEntityType": "loans",
+  "linkedEntityId": "665floan..."
+}
+
+--------------------------------------------------------------------------------
+4.30  life_events
+--------------------------------------------------------------------------------
+{
+  "eventType": "CHILD",          MARRIAGE|CHILD|JOB_CHANGE|RELOCATION|
+                                 RETIREMENT|BEREAVEMENT|ILLNESS
+  "targetDate": "2027-01-15",
+  "affectedMemberIds": ["665fmember..."],
+  "estimatedCost": "400000.00",
+  "planningStatus": "PLANNED",
+  "currency": "INR"
+}
+
+--------------------------------------------------------------------------------
+4.31  documents
+--------------------------------------------------------------------------------
+{
+  "documentType": "BANK_STATEMENT",  RECEIPT|BILL|PAYSLIP|BANK_STATEMENT|
+                                     CARD_STATEMENT|POLICY|LOAN_STATEMENT|...
+  "filename": "hdfc-march.pdf",      *
+  "mimeType": "application/pdf",
+  "storageType": "GRIDFS",
+  "storageReference": "665fgrid...",
+  "pageCount": 24,
+  "fileSizeBytes": 1843200,
+  "linkedEntityType": "expenses",
+  "linkedEntityId": null,
+  "processingStatus": "EXTRACTED",   PENDING|PROCESSING|EXTRACTED|
+                                     CONFIRMED|FAILED
+  "uploadedBy": "665fuser...",
+  "uploadedAt": "2026-03-14T09:20:00.000Z"
+}
+
+This is METADATA ONLY. There is no endpoint to send the file — see gap 6.3.
+
+
+--------------------------------------------------------------------------------
+4.32  audit_findings
+--------------------------------------------------------------------------------
+{
+  "dedupeKey": "CATEGORY_OVERSPEND:FOOD:2026-03",  * UNIQUE per household
+  "category": "CATEGORY_OVERSPEND",
+  "severity": "ATTENTION",       INFO|ATTENTION|HIGH|CRITICAL
+  "title": "Food spending is 38% above your usual",
+  "expectedValue": "12000.00",
+  "actualValue": "16560.00",
+  "varianceAmount": "4560.00",
+  "variancePercent": 38.0,
+  "rootCause": "TRANSACTION_VOLUME",  TRANSACTION_VOLUME|TRANSACTION_VALUE|
+                                      NEW_CATEGORY|ONE_OFF|UNKNOWN
+  "financialImpact": "4560.00",
+  "evidenceTransactionIds": ["665ftxn...", "665ftxn2..."],
+  "recommendedActions": ["Review 6 food deliveries above ₹800"],
+  "periodStart": "2026-03-01T00:00:00.000Z",
+  "detectedAt": "2026-04-01T02:00:00.000Z",
+  "status": "OPEN",              OPEN|REVIEWED|RESOLVED|ACCEPTED|IGNORED|
+                                 SNOOZED|AUTO_RESOLVED
+  "acceptedVariance": null,
+  "snoozedUntil": null,
+  "dataQuality": "GOOD"
+}
+
+dedupeKey MUST NOT contain a timestamp. It is the identity of a finding across
+runs — with a timestamp in it, every run creates a "new" finding and the user
+is re-alerted about the same thing forever.
+
+UPSERT on (householdId, dedupeKey): re-running preserves status and history.
+
+
+--------------------------------------------------------------------------------
+4.33  notifications
+--------------------------------------------------------------------------------
+{
+  "userId": "665fuser...",       *
+  "dedupeKey": "BILL_DUE:665fbill...:2026-03",
+  "type": "BILL_DUE",            *
+  "severity": "ATTENTION",
+  "title": "Electricity due in 3 days",   *
+  "body": "BESCOM ₹2,100 due 18 March",
+  "actionRoute": "/bills/665fbill...",    in-app deep link
+  "entityType": "bill_instances",
+  "entityId": "665finst...",
+  "readAt": null,
+  "expiresAt": "2026-03-19T00:00:00.000Z"
+}
+
+Sorted unread-first: { readAt: 1, createdAt: -1 }.
+Dedupe is severity-based — an existing unread notification with the same
+dedupeKey is only replaced if the new severity is HIGHER. Otherwise the same
+bill notifies daily and the user turns notifications off.
+
+Mark read = PUT with { "readAt": "..." } and the version.
+
+
+--------------------------------------------------------------------------------
+4.34  financial_snapshots
+--------------------------------------------------------------------------------
+{
+  "periodStart": "2026-03-01T00:00:00.000Z",  *
+  "periodEnd": "2026-03-31T00:00:00.000Z",
+  "totalIncome": "85000.00",
+  "totalExpense": "58430.00",
+  "totalSavings": "26570.00",
+  "netWorth": "1284300.00",
+  "totalAssets": "5096700.00",
+  "totalLiabilities": "3812400.00",
+  "savingsRate": 31.26,          number, percent
+  "categoryBreakdown": { "FOOD": "16560.00", "TRANSPORT": "8200.00" },
+  "computedAt": "2026-04-01T02:00:00.000Z"
+}
+
+Written by a job, read by the client. IMMUTABLE once a period is closed —
+recomputing history on every dashboard load is slow AND makes past months
+change under the user, which destroys trust in the numbers.
+
+
+================================================================================
+PART 5 — THE FOUR ENDPOINTS THAT CANNOT BE GENERIC CRUD
+================================================================================
+
+5.1  PAY A BILL
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/bill-instances/{id}/pay
+Permission: bill.update
+
+REQUEST
+{
+  "amount": "2140.00",           *
+  "currency": "INR",
+  "accountId": "665facc...",
+  "categoryId": "665fcat...",
+  "paidDate": "2026-03-17",      defaults to today
+  "merchant": "BESCOM"
+}
+
+→ 200
+{ "success": true, "data": { "expenseId": "665fexp...", "alreadyPaid": false } }
+
+ALREADY PAID — return 200, not an error:
+{ "success": true, "data": { "expenseId": "665fexp...", "alreadyPaid": true } }
+
+WHY THIS IS NOT THREE CLIENT CALLS: paying a bill writes an expense, writes a
+transaction, and flips the instance to PAID. As three requests, a dropped
+connection between them leaves an expense with no bill, or a bill marked paid
+with no expense. All three in ONE MongoDB transaction, or none.
+
+Idempotency comes from linkedExpenseId: if it is already set, return the
+existing expenseId rather than creating a second one. A double-tap on a slow
+connection must not pay twice.
+
+
+5.2  SEARCH
+--------------------------------------------------------------------------------
+GET /api/households/{hid}/search?q=swiggy&modules=expenses,transactions&limit=40
+
+  q        min 2 chars — shorter returns an empty array, not an error
+  modules  optional CSV of entityType values
+  limit    default 40, cap 100
+
+→ 200
+{ "success": true, "data": [
+    { "_id": "...", "entityType": "expenses", "entityId": "665fexp...",
+      "title": "Swiggy — ₹1,240", "amount": "1240.00",
+      "date": "2026-03-12T00:00:00.000Z", "score": 4.2 }
+] }
+
+Queries the denormalised search_documents collection with a weighted text
+index (title 10, keywords 5, searchText 1), sorted by textScore.
+
+Apply the same visibility filter as any read. Search is the easiest place to
+leak a PRIVATE record, because nobody thinks of it as a read endpoint.
+
+
+5.3  REQUEST AN EXPORT
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/exports
+Permission: export.create
+
+REQUEST
+{
+  "format": "CSV",               JSON|CSV|PDF
+  "modules": ["expenses", "income_events"],
+  "scope": "MINE",               MINE|HOUSEHOLD
+  "personalBackup": false
+}
+
+→ 202  (not 200 — the file does not exist yet)
+{ "success": true, "data": {
+    "_id": "665fjob...", "status": "QUEUED",
+    "requestedAt": "2026-03-14T09:20:00.000Z",
+    "expiresAt": "2026-03-15T09:20:00.000Z" } }
+
+→ 401 STEP_UP_REQUIRED when scope is HOUSEHOLD and the x-step-up header is
+absent:
+{ "success": false, "error": { "code": "STEP_UP_REQUIRED",
+  "message": "Confirm your password to export household data." } }
+
+A household export is an entire family's financial history leaving the system.
+A stolen session should not be enough.
+
+
+5.4  DOWNLOAD AN EXPORT
+--------------------------------------------------------------------------------
+GET /api/households/{hid}/exports/{id}/download
+
+→ 200  { "success": true, "data": {
+           "url": "https://signed-url...", "expiresAt": "..." } }
+→ 404  NOT_READY — still queued or running
+→ 410  EXPIRED — link dead, tell the user to create a new export
+
+Scope to userId AND householdId. Signed URLs expire in 24h. No public links.
+
+
+================================================================================
+PART 6 — SIX GAPS. THE FIRST TWO BLOCK EVERYTHING.
+================================================================================
+These are not in routes.js today. Without 6.1 and 6.2 a new user can sign up
+and then do nothing at all, because every data endpoint needs a householdId
+they have no way to obtain.
+
+
+6.1  HOUSEHOLDS — BLOCKING
+--------------------------------------------------------------------------------
+POST /api/households
+{
+  "name": "Sharma family",       *
+  "type": "FAMILY",              INDIVIDUAL|COUPLE|FAMILY|JOINT_FAMILY|
+                                 SINGLE_PARENT|OTHER
+  "country": "IN",
+  "baseCurrency": "INR",         *
+  "timezone": "Asia/Kolkata",
+  "financialMonthStartDay": 1,   1-28 only. A 31st start day breaks in February.
+  "financialYearType": "APRIL_MARCH"
+}
+→ 201 { "success": true, "data": { "_id": "665fhh...", "name": "...",
+                                   "version": 1, ... } }
+
+Also create, in the same transaction:
+  - household_users row: caller, role HOUSEHOLD_ADMIN, status ACTIVE
+  - family_members row: relationship SELF, linked to the caller
+  - the household's copy of the default expense categories
+
+GET    /api/households/{id}     → 200 household object
+PUT    /api/households/{id}     → standard version-checked update
+                                  HOUSEHOLD_ADMIN only
+
+Changing baseCurrency after transactions exist must be refused with 400. Every
+stored baseAmount was converted against the old one.
+
+
+6.2  WHO AM I — BLOCKING
+--------------------------------------------------------------------------------
+GET /api/me
+HEADER authorization: Bearer {accessToken}
+
+→ 200
+{ "success": true, "data": {
+    "user": { "_id": "665fuser...", "primaryEmail": "asha@example.com",
+              "preferredName": "Asha", "status": "ACTIVE" },
+    "households": [
+      { "householdId": "665fhh...", "name": "Sharma family",
+        "role": "HOUSEHOLD_ADMIN", "familyMemberId": "665fmember...",
+        "baseCurrency": "INR", "status": "ACTIVE" }
+    ],
+    "permissions": ["expense.read", "expense.create", ...]
+  } }
+
+After sign-in the app knows a userId and nothing else. This is the only way it
+discovers which household to load. Return an empty households array for a
+brand-new user — that is the signal to run household creation.
+
+
+6.3  DOCUMENT BINARY UPLOAD
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/documents/upload
+Content-Type: multipart/form-data
+  file          the binary
+  documentType  RECEIPT | BANK_STATEMENT | ...
+
+→ 201 { "success": true, "data": { "_id": "665fdoc...",
+        "storageReference": "665fgrid...", "pageCount": 24 } }
+
+GET /api/households/{hid}/documents/{id}/content
+→ the bytes, authenticated, with the stored mimeType
+
+The documents collection stores metadata pointing at GridFS bucket
+"financial_documents", but there is no way to put a file there. Enforce a size
+cap (12MB matches the client) and reject anything outside the allowed MIME
+list.
+
+
+6.4  PREFERENCES
+--------------------------------------------------------------------------------
+GET  /api/me/preferences               → user_preferences row
+PUT  /api/me/preferences               → version-checked update
+GET  /api/me/notification-preferences
+PUT  /api/me/notification-preferences
+
+Both collections exist in the schema and have no HTTP surface.
+
+Do NOT accept MPIN, biometric, auto-lock or analytics opt-in here. Those are
+device-scoped by design and syncing them would unlock a second device with the
+first device's PIN.
+
+
+6.5  ENTITLEMENTS
+--------------------------------------------------------------------------------
+GET /api/households/{hid}/entitlements
+→ 200
+{ "success": true, "data": {
+    "plan": "PLUS",
+    "status": "ACTIVE",
+    "currentPeriodEnd": "2026-09-01T00:00:00.000Z",
+    "features": [
+      { "featureCode": "bulkImport", "isEnabled": true, "limitValue": null },
+      { "featureCode": "documentScan", "isEnabled": true, "limitValue": 200 }
+    ] } }
+
+POST /api/households/{hid}/subscriptions/verify
+{ "platform": "GOOGLE", "purchaseToken": "..." }
+→ 200 the refreshed entitlement block
+
+The client's SubscriptionProvider is a cache and is trivially editable on a
+rooted device. This endpoint is the authority. Verify the receipt against
+Apple/Google server-side, never client-side.
+
+
+6.6  BULK TRANSACTION IMPORT
+--------------------------------------------------------------------------------
+POST /api/households/{hid}/transactions/bulk
+{
+  "idempotencyKey": "stmt-665fdoc...-v1",   * dedupes a retried request
+  "sourceDocumentId": "665fdoc...",
+  "records": [
+    { "transactionType": "EXPENSE", "amount": "1240.00",
+      "transactionDate": "2026-03-12T00:00:00.000Z",
+      "description": "SWIGGY ORDER 88421", "merchant": "Swiggy",
+      "categoryId": "665fcat...", "accountId": "665facc...",
+      "importReference": "HDFC-2026-03-12-88421" }
+  ]
+}
+
+→ 201
+{ "success": true, "data": {
+    "inserted": 287, "skippedDuplicates": 13, "failed": 0,
+    "skipped": [ { "importReference": "HDFC-...", "reason": "DUPLICATE" } ] } }
+
+Statement import creates up to ~1500 expenses for one year. As individual
+POSTs that is 1500 round trips, and a dropped connection at row 800 leaves a
+half-imported year the user cannot easily unwind.
+
+Cap the batch at 500 records — the client chunks. Skip on duplicate
+importReference rather than failing the batch: a partial re-import is the
+normal retry path, and it must be safe.
+
+
+================================================================================
+PART 7 — BUILD ORDER
+================================================================================
+
+PHASE 1 — the app connects. Nothing works without all of these.
+    POST   /v1/auth/sign-up
+    POST   /v1/auth/sign-in
+    POST   /v1/auth/refresh
+    POST   /v1/auth/sign-out
+    GET    /api/health/database
+    POST   /api/households                 (gap 6.1)
+    GET    /api/households/:id             (gap 6.1)
+    GET    /api/me                         (gap 6.2)
+    the 5 generic record endpoints
+    CORS configured per 0.3
+
+PHASE 2 — the app is fully usable.
+    POST   .../bill-instances/:id/pay
+    GET    .../search
+    GET/PUT /api/me/preferences            (gap 6.4)
+    GET    .../entitlements                (gap 6.5)
+    POST   /v1/auth/reset
+    POST   /v1/auth/oauth
+    DELETE /v1/auth/account
+
+PHASE 3 — scanning and export.
+    POST   .../documents/upload            (gap 6.3)
+    GET    .../documents/:id/content       (gap 6.3)
+    POST   .../transactions/bulk           (gap 6.6)
+    POST   .../exports
+    GET    .../exports/:id/download
+
+Phase 1 requires zero Dart changes — the client already calls exactly these
+paths with exactly these shapes.
+
+
+================================================================================
+PART 8 — TEN THINGS THAT WILL BITE
+================================================================================
+ 1. OPTIONS must return 204 before auth middleware. Preflight carries no
+    Authorization header; auth-first returns 401 and the browser gives up.
+ 2. Money as a JSON number instead of a string. Corrupts silently, at the 3rd
+    decimal, months later.
+ 3. householdId read from the body instead of the path. That is one household
+    reading another's finances.
+ 4. Forgetting isDeleted: { $ne: true } on a read. Deleted records reappear.
+ 5. skip/offset pagination. Rows duplicate or vanish while scrolling.
+ 6. Returning 403 for a record in another household. It confirms the record
+    exists. Return 404.
+ 7. A timestamp inside dedupeKey. Every audit run re-alerts the same finding.
+ 8. Leaking driver text in the 500 message. Fixed sentence only.
+ 9. Missing sparse unique index on transactions.importReference. Re-importing
+    a statement doubles the month.
+10. Letting the client set version. The server owns it — $inc only.
+
+
+================================================================================
+END. 17 endpoints for Phase 1+2, 5 more for Phase 3.
+Companion file: database_schema.txt
+================================================================================

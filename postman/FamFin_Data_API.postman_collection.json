@@ -1,0 +1,820 @@
+{
+  "info": {
+    "_postman_id": "efbe0f65-a346-458a-a5ef-ec26abc33911",
+    "name": "FamFin Data API",
+    "description": "FamFin API contract collection. Configure baseUrl and appToken first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://YOUR-DATA-API.onrender.com"
+    },
+    {
+      "key": "appToken",
+      "value": "YOUR_FAMFIN_APP_TOKEN"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "householdId",
+      "value": ""
+    },
+    {
+      "key": "recordId",
+      "value": ""
+    },
+    {
+      "key": "recordVersion",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Sign Up",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/auth/sign-up",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "auth",
+            "sign-up"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"asha@example.com\",\n  \"password\": \"correct horse battery\",\n  \"displayName\": \"Asha\",\n  \"locale\": \"en_IN\",\n  \"acceptedTerms\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) { const j=pm.response.json(); pm.collectionVariables.set('accessToken', j.accessToken); pm.collectionVariables.set('refreshToken', j.refreshToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sign In",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/auth/sign-in",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "auth",
+            "sign-in"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"asha@example.com\",\n  \"password\": \"correct horse battery\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) { const j=pm.response.json(); pm.collectionVariables.set('accessToken', j.accessToken); pm.collectionVariables.set('refreshToken', j.refreshToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refresh",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "auth",
+            "refresh"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Database Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/health/database",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health",
+            "database"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Create Household",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Sharma family\",\n  \"type\": \"FAMILY\",\n  \"country\": \"IN\",\n  \"baseCurrency\": \"INR\",\n  \"timezone\": \"Asia/Kolkata\",\n  \"financialMonthStartDay\": 1,\n  \"financialYearType\": \"APRIL_MARCH\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) { pm.collectionVariables.set('householdId', pm.response.json().data._id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Who Am I",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "me"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Get Household",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Create Expense",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/expenses",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "expenses"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"1240.00\",\n  \"currency\": \"INR\",\n  \"baseAmount\": \"1240.00\",\n  \"baseCurrency\": \"INR\",\n  \"fxRate\": \"1.0\",\n  \"expenseDate\": \"2026-03-12T00:00:00.000Z\",\n  \"merchant\": \"Swiggy\",\n  \"description\": \"Dinner\",\n  \"ownership\": \"HOUSEHOLD\",\n  \"nature\": \"VARIABLE\",\n  \"costType\": \"DISCRETIONARY\",\n  \"planningType\": \"UNPLANNED\",\n  \"spendingType\": \"WANT\",\n  \"priority\": \"LOW\",\n  \"paymentMethod\": \"UPI\",\n  \"reimbursementStatus\": \"NOT_APPLICABLE\",\n  \"tags\": [\n    \"weekend\"\n  ],\n  \"source\": \"MANUAL\",\n  \"visibility\": \"HOUSEHOLD\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) { const d=pm.response.json().data; pm.collectionVariables.set('recordId', d._id); pm.collectionVariables.set('recordVersion', String(d.version)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Expenses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/expenses?limit=25",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "expenses?limit=25"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Get Expense",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/expenses/{{recordId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "expenses",
+            "{{recordId}}"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Update Expense",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{recordVersion}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/expenses/{{recordId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "expenses",
+            "{{recordId}}"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"merchant\": \"Swiggy updated\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/search?q=swiggy&modules=expenses,transactions&limit=40",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "search?q=swiggy&modules=expenses,transactions&limit=40"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Bulk Transactions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/transactions/bulk",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "transactions",
+            "bulk"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idempotencyKey\": \"stmt-demo-v1\",\n  \"records\": [\n    {\n      \"transactionType\": \"EXPENSE\",\n      \"amount\": \"1240.00\",\n      \"currency\": \"INR\",\n      \"transactionDate\": \"2026-03-12T00:00:00.000Z\",\n      \"description\": \"SWIGGY ORDER 88421\",\n      \"merchant\": \"Swiggy\",\n      \"importReference\": \"HDFC-2026-03-12-88421\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Request Export",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/exports",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "exports"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"format\": \"JSON\",\n  \"modules\": [\n    \"expenses\",\n    \"transactions\"\n  ],\n  \"scope\": \"MINE\",\n  \"personalBackup\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Entitlements",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/households/{{householdId}}/entitlements",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "households",
+            "{{householdId}}",
+            "entitlements"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Get Preferences",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/me/preferences",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "me",
+            "preferences"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    },
+    {
+      "name": "Sign Out",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "x-app-token",
+            "value": "{{appToken}}",
+            "type": "text",
+            "disabled": false
+          },
+          {
+            "key": "x-correlation-id",
+            "value": "{{$timestamp}}-{{$randomInt}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/v1/auth/sign-out",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "v1",
+            "auth",
+            "sign-out"
+          ]
+        },
+        "description": ""
+      },
+      "response": []
+    }
+  ]
+}

@@ -1,0 +1,532 @@
+FamFin AI Gateway - Render API Reference
+========================================
+
+Environment
+-----------
+Base URL:
+https://render-kroy.onrender.com
+
+Authorization:
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+
+Flutter / App configuration
+---------------------------
+FAMFIN_AI_GATEWAY=https://render-kroy.onrender.com
+
+FAMFIN_AI_APP_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+
+Common authenticated headers
+----------------------------
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+
+Optional household header
+-------------------------
+X-FamFin-Household: hh_test_001
+
+
+1. ROOT SERVICE CHECK
+=====================
+
+Method:
+GET
+
+URL:
+https://render-kroy.onrender.com/
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/'
+
+Expected response:
+{
+  "service": "FamFin AI Gateway",
+  "status": "ok",
+  "version": "0.1.0"
+}
+
+
+2. RENDER HEALTH CHECK
+======================
+
+Method:
+GET
+
+URL:
+https://render-kroy.onrender.com/healthz
+
+Authentication:
+Not required
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/healthz'
+
+Expected response:
+{
+  "status": "ok"
+}
+
+
+3. AI HEALTH
+============
+
+Method:
+GET
+
+URL:
+https://render-kroy.onrender.com/v1/ai/health
+
+Headers:
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/v1/ai/health' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app'
+
+Expected response:
+{
+  "status": "ok",
+  "model": "gpt-5.6-luna",
+  "region": "render",
+  "streamingEnabled": true
+}
+
+
+4. AI CHAT - STREAMING
+======================
+
+Method:
+POST
+
+URL:
+https://render-kroy.onrender.com/v1/ai/chat
+
+Headers:
+Content-Type: application/json
+Accept: text/event-stream
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+X-FamFin-Household: hh_test_001
+
+Postman / cURL:
+curl --location --no-buffer 'https://render-kroy.onrender.com/v1/ai/chat' \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: text/event-stream' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app' \
+  --header 'X-FamFin-Household: hh_test_001' \
+  --data '{
+    "model": "default",
+    "stream": true,
+    "messages": [
+      {
+        "role": "user",
+        "content": "How much can I safely spend this month?"
+      }
+    ],
+    "context": {
+      "currency": "INR",
+      "hasIncome": true,
+      "monthlyIncome": 85000.0,
+      "monthlyRegularIncome": 80000.0,
+      "monthlyVariableIncome": 5000.0,
+      "remainingExpectedIncome": 0.0,
+      "incomeSourceCount": 2,
+      "incomeEarnerCount": 2,
+      "liquidBalance": 96000.0,
+      "hasExpenseData": true,
+      "monthTotalSpend": 41200.0,
+      "monthEssentialSpend": 28000.0,
+      "monthLifestyleSpend": 13200.0,
+      "monthlyCommittedBills": 12400.0,
+      "outstandingBillCount": 3,
+      "overdueCount": 1,
+      "overdueTotal": 2400.0,
+      "unpaidCommitments": 9800.0,
+      "expectedRecovery": 8400.0,
+      "accountCount": 4,
+      "safeToSpend": 12400.0,
+      "protectedAmount": 18000.0,
+      "assumptions": [
+        "Salary credited on the 1st",
+        "Variable income excluded"
+      ],
+      "missingData": [
+        "No bill history for utilities"
+      ],
+      "hasDebt": true,
+      "totalDebt": 480000.0,
+      "monthlyDebtService": 18400.0,
+      "loanCount": 2,
+      "cardCount": 3,
+      "creditCardOutstanding": 14200.0,
+      "debtToIncome": 0.216,
+      "debtStrategy": "avalanche",
+      "investmentValue": 320000.0,
+      "investmentCount": 6,
+      "monthlyInvestmentContribution": 9000.0,
+      "totalAssetValue": 1500000.0,
+      "netWorth": 1421800.0,
+      "goalCount": 4,
+      "activeGoalCount": 3,
+      "goalsOnTrack": 2,
+      "monthlyGoalContributions": 7000.0,
+      "emergencyConfigured": true,
+      "emergencyReserve": 68000.0,
+      "emergencyTarget": 130000.0,
+      "emergencyShortfall": 62000.0,
+      "emergencyMonths": 2.4,
+      "policyCount": 3,
+      "monthlyPremium": 2400.0,
+      "annualPremium": 28800.0,
+      "renewalsDueSoon": 1,
+      "healthScore": 68,
+      "healthLabel": "Building stability",
+      "healthRisks": [
+        "Emergency fund: covers 2.4 months, target 6",
+        "Credit utilisation: 61% of limit in use"
+      ]
+    }
+  }'
+
+Expected streaming response:
+data: {"delta":"You can safely spend ₹12,400 this month. "}
+
+data: {"delta":"That value comes directly from safeToSpend."}
+
+data: {"delta":"Your protectedAmount is ₹18,000."}
+
+data: [DONE]
+
+Important:
+- The response content type is text/event-stream.
+- Flutter should concatenate every "delta" value.
+- The final event must be exactly:
+  data: [DONE]
+- A line such as ": ping" is an SSE keep-alive and should be ignored.
+
+
+5. AI DOCUMENT EXTRACTION - OCR TEXT
+====================================
+
+Method:
+POST
+
+URL:
+https://render-kroy.onrender.com/v1/ai/extract
+
+Headers:
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+X-FamFin-Household: hh_test_001
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/v1/ai/extract' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app' \
+  --header 'X-FamFin-Household: hh_test_001' \
+  --data '{
+    "documentType": "receipt",
+    "mimeType": "image/jpeg",
+    "extractedText": "RELIANCE FRESH 14/08/26 TOTAL 1,284.50 GSTIN 27AAACR5055K1ZK",
+    "expectedFields": [
+      "merchant",
+      "date",
+      "totalAmount",
+      "currency",
+      "category",
+      "taxAmount"
+    ],
+    "hints": {
+      "currency": "INR",
+      "locale": "en_IN"
+    }
+  }'
+
+Expected response:
+{
+  "documentType": "receipt",
+  "typeConfidence": 0.94,
+  "fields": {
+    "merchant": {
+      "value": "Reliance Fresh",
+      "confidence": 0.97,
+      "sourceText": "RELIANCE FRESH"
+    },
+    "date": {
+      "value": "2026-08-14",
+      "confidence": 0.91,
+      "sourceText": "14/08/26"
+    },
+    "totalAmount": {
+      "value": "1284.50",
+      "confidence": 0.99,
+      "sourceText": "TOTAL 1,284.50"
+    },
+    "currency": {
+      "value": "INR",
+      "confidence": 0.88,
+      "sourceText": null
+    }
+  },
+  "unmappedText": [],
+  "warnings": []
+}
+
+Important:
+- Monetary extracted values must remain strings.
+- Example:
+  "value": "1284.50"
+- Do not convert extracted money values to JSON floats.
+
+
+6. AI DOCUMENT EXTRACTION - BASE64
+==================================
+
+Method:
+POST
+
+URL:
+https://render-kroy.onrender.com/v1/ai/extract
+
+Headers:
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+X-FamFin-Household: hh_test_001
+
+Request:
+curl --location 'https://render-kroy.onrender.com/v1/ai/extract' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app' \
+  --header 'X-FamFin-Household: hh_test_001' \
+  --data '{
+    "documentType": "receipt",
+    "mimeType": "image/jpeg",
+    "contentBase64": "PASTE_BASE64_IMAGE_DATA_HERE",
+    "expectedFields": [
+      "merchant",
+      "date",
+      "totalAmount",
+      "currency"
+    ],
+    "hints": {
+      "currency": "INR",
+      "locale": "en_IN"
+    }
+  }'
+
+
+7. AI QUOTA
+===========
+
+Method:
+GET
+
+URL:
+https://render-kroy.onrender.com/v1/ai/quota
+
+Headers:
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+X-FamFin-Household: hh_test_001
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/v1/ai/quota' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app' \
+  --header 'X-FamFin-Household: hh_test_001'
+
+Expected response:
+{
+  "edition": "plus",
+  "aiQuestions": {
+    "used": 3,
+    "limit": 200,
+    "resetsAt": "2026-09-01T00:00:00.000Z"
+  },
+  "autoScans": {
+    "used": 1,
+    "limit": 50,
+    "resetsAt": "2026-09-01T00:00:00.000Z"
+  },
+  "blocked": false
+}
+
+
+8. AI FEEDBACK - DOWNVOTE
+=========================
+
+Method:
+POST
+
+URL:
+https://render-kroy.onrender.com/v1/ai/feedback
+
+Headers:
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+X-FamFin-Client: famfin-app
+X-FamFin-Household: hh_test_001
+
+Postman / cURL:
+curl --location 'https://render-kroy.onrender.com/v1/ai/feedback' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s' \
+  --header 'X-FamFin-Client: famfin-app' \
+  --header 'X-FamFin-Household: hh_test_001' \
+  --data '{
+    "messageId": "msg_8812",
+    "rating": "down",
+    "reason": "wrong_number",
+    "comment": "Said my net worth included my credit limit."
+  }'
+
+Expected response:
+HTTP 204 No Content
+
+
+9. AI FEEDBACK - UPVOTE
+=======================
+
+Method:
+POST
+
+URL:
+https://render-kroy.onrender.com/v1/ai/feedback
+
+Request body:
+{
+  "messageId": "msg_8813",
+  "rating": "up",
+  "reason": "other",
+  "comment": "Clear and useful answer."
+}
+
+Expected response:
+HTTP 204 No Content
+
+
+10. AUTHENTICATION ERROR EXAMPLES
+=================================
+
+Missing token:
+GET https://render-kroy.onrender.com/v1/ai/health
+
+Expected:
+HTTP 401
+
+{
+  "error": {
+    "message": "Authorization token is required.",
+    "code": "unauthorized"
+  }
+}
+
+Invalid token:
+Authorization: Bearer INVALID_TOKEN
+
+Expected:
+HTTP 401
+
+{
+  "error": {
+    "message": "Authorization token is invalid.",
+    "code": "unauthorized"
+  }
+}
+
+
+11. QUOTA EXCEEDED
+==================
+
+Possible response:
+HTTP 402
+
+{
+  "error": {
+    "message": "Monthly AI quota exhausted for this household.",
+    "code": "quota_exhausted",
+    "retryAfterSeconds": 0
+  }
+}
+
+
+12. RATE LIMIT
+==============
+
+Possible response:
+HTTP 429
+
+{
+  "error": {
+    "message": "Too many requests. Please try again shortly.",
+    "code": "rate_limited",
+    "retryAfterSeconds": 60
+  }
+}
+
+
+13. MODEL / OPENAI UNAVAILABLE
+==============================
+
+Possible response:
+HTTP 503
+
+{
+  "error": {
+    "message": "AI service is temporarily unavailable.",
+    "code": "model_unavailable"
+  }
+}
+
+
+14. ENDPOINT SUMMARY
+====================
+
+GET  https://render-kroy.onrender.com/
+GET  https://render-kroy.onrender.com/healthz
+GET  https://render-kroy.onrender.com/v1/ai/health
+POST https://render-kroy.onrender.com/v1/ai/chat
+POST https://render-kroy.onrender.com/v1/ai/extract
+GET  https://render-kroy.onrender.com/v1/ai/quota
+POST https://render-kroy.onrender.com/v1/ai/feedback
+
+
+15. POSTMAN SETTINGS
+====================
+
+Collection variable:
+baseUrl = https://render-kroy.onrender.com
+
+Collection variable:
+appToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+
+Collection variable:
+householdId = hh_test_001
+
+Postman Authorization:
+Type: Bearer Token
+
+Token:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmYW1maW4tYWktZ2F0ZXdheSIsImF1ZCI6ImZhbWZpbi1mbHV0dGVyIiwic3ViIjoiZmFtZmluLWFwcCIsImlhdCI6MTc4NzI2MzYxNSwianRpIjoiYzQ4NWYyNzVkNThlN2EyYmEyZTU0M2IxY2RkMmI2OTcifQ.GXtjh0UVkmfcEuNRSGECMVaxUhSqvz-yH3EPHl31a6s
+
+Recommended common headers:
+X-FamFin-Client: famfin-app
+X-FamFin-Household: {householdId}
+
+For /v1/ai/chat also add:
+Accept: text/event-stream
+Content-Type: application/json
+
+
+SECURITY NOTE
+=============
+
+The Bearer token in this file is a credential. Do not commit this TXT file to a
+public GitHub repository. Keep it private. If the token is exposed publicly,
+replace FAMFIN_AI_APP_TOKEN in Render and update Flutter/Postman with the new value.
